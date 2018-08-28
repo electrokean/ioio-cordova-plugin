@@ -14,6 +14,9 @@ var ioio = {
 	addPinListener:function(pin,callback){
 		this.addValuePinListener(pin,0,callback);
 	},
+	clearPinListener:function(pin){
+		this.pinListeners[pin] = null;
+	},
 	open: function(options,succ,fail,allListener) {
 		var that = this;
         cordova.exec(
