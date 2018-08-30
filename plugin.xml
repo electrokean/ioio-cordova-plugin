@@ -39,6 +39,14 @@
 			target-dir="src/com/appshed/ioioplugin/entity" 
 		/>
 		<source-file 
+				   src="src/com/appshed/ioioplugin/entity/PinUartInput.java" 
+			target-dir="src/com/appshed/ioioplugin/entity" 
+		/>
+		<source-file 
+				   src="src/com/appshed/ioioplugin/entity/PinUartOutput.java" 
+			target-dir="src/com/appshed/ioioplugin/entity" 
+		/>
+		<source-file 
 			src="res/xml/accessory_filter.xml" 
 			target-dir="res/xml" 
 		/>

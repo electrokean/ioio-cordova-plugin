@@ -2,6 +2,8 @@ package com.appshed.ioioplugin.service;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.PluginResult;
@@ -13,12 +15,15 @@ import com.appshed.ioioplugin.entity.PinAnalogInput;
 import com.appshed.ioioplugin.entity.PinDigitalInput;
 import com.appshed.ioioplugin.entity.PinDigitalOutput;
 import com.appshed.ioioplugin.entity.PinPwmOutput;
+import com.appshed.ioioplugin.entity.PinUartInput;
+import com.appshed.ioioplugin.entity.PinUartOutput;
 
 import android.content.Intent;
 import android.os.IBinder;
 import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.IOIO;
 import ioio.lib.api.IOIO.VersionType;
+import ioio.lib.api.Uart;
 import ioio.lib.api.Uart.StopBits;
 import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
@@ -31,7 +36,7 @@ import ioio.lib.util.android.IOIOService;
  * notification bar, enabling the user to stop the service.
  */
 public class IOIOCOmmunicationService extends IOIOService {
-	public static final int PWN_MAX_FREQ = 10000;
+	public static final int PWM_MAX_FREQ = 10000;
 	public static Map<Integer,Pin> pins;
 	public static CallbackContext eventListener;
 
@@ -39,6 +44,9 @@ public class IOIOCOmmunicationService extends IOIOService {
 	public static boolean activeLed = true;
 	public static long lastCallbackFromJS = 0;
 	public static long lastCallbackToJS = 0;
+
+	public static Uart uart = null;
+	public static int txpin = -1;
 
 	public static void initPins(){
 		System.out.print("initPins()");
@@ -49,7 +57,7 @@ public class IOIOCOmmunicationService extends IOIOService {
 		pins.put(pinPort,new PinAnalogInput(pinPort));
 	}
 
-	public static void addPwnOutput(int pinPort,int freq){
+	public static void addPwmOutput(int pinPort,int freq){
 		pins.put(pinPort,new PinPwmOutput(pinPort,freq));
 	}
 
@@ -59,6 +67,14 @@ public class IOIOCOmmunicationService extends IOIOService {
 
 	public static void addDigitalInput(int pinPort){
 		pins.put(pinPort,new PinDigitalInput(pinPort));
+	}
+
+	public static void addUartOutput(int txPin, int rxPin, int baud, int parity, int stopBits){
+		pins.put(txPin,new PinUartOutput(txPin, rxPin, baud, parity, stopBits));
+	}
+
+	public static void addUartInput(int rxPin, int txPin, int baud, int parity, int stopBits){
+		pins.put(rxPin,new PinUartInput(rxPin, txPin, baud, parity, stopBits));
 	}
 
 	public static void setPwmOutput(int pinPort,int freq){
@@ -78,6 +94,12 @@ public class IOIOCOmmunicationService extends IOIOService {
 			PinDigitalOutput pinDigitalOutput = (PinDigitalOutput)pins.get(pinPort);
 			pinDigitalOutput.output = !pinDigitalOutput.output;
 		}
+	}
+
+	public static void writeUart(String data){
+		if (uart!=null || txpin<0) return;
+		PinUartOutput pinUartOutput = (PinUartOutput)pins.get(txpin);
+		pinUartOutput.output = data;
 	}
 
 	@Override
@@ -114,7 +136,7 @@ public class IOIOCOmmunicationService extends IOIOService {
 
 					if(pin instanceof PinPwmOutput){ // PinPwmOutput
 						PinPwmOutput pinPwmOutput = (PinPwmOutput)pin;
-						pinPwmOutput.pwmOutput = ioio_.openPwmOutput(pinPort, PWN_MAX_FREQ);
+						pinPwmOutput.pwmOutput = ioio_.openPwmOutput(pinPort, PWM_MAX_FREQ);
 					}else if(pin instanceof PinAnalogInput){ // PinAnalogInput
 						PinAnalogInput pinAnalogInput = (PinAnalogInput)pin;
 						pinAnalogInput.analogInput = ioio_.openAnalogInput(pinPort);
@@ -124,6 +146,17 @@ public class IOIOCOmmunicationService extends IOIOService {
 					}else if(pin instanceof PinDigitalInput){ // PinDigitalInput
 						PinDigitalInput pinDigitalInput = (PinDigitalInput)pin;
 						pinDigitalInput.digitalInput = ioio_.openDigitalInput(pinPort);
+					}else if(pin instanceof PinUartOutput){ // PinUartInput
+						PinUartOutput pinUartOutput = (PinUartOutput)pin;
+						if (uart==null)
+							uart = ioio_.openUart(pinUartOutput.rxPin, pinUartOutput.pin, pinUartOutput.baud, 
+								pinUartOutput.parity, pinUartOutput.stopBits);
+						txpin = pinUartOutput.pin;
+					}else if(pin instanceof PinUartInput){ // PinUartInput
+						PinUartInput pinUartInput = (PinUartInput)pin;
+						if (uart==null)
+							uart = ioio_.openUart(pinUartInput.pin, pinUartInput.txPin, pinUartInput.baud, 
+								pinUartInput.parity, pinUartInput.stopBits);
 					}
 				}
 			}
@@ -171,6 +204,32 @@ public class IOIOCOmmunicationService extends IOIOService {
 						try {
 							parameters.put(pinDigitalInput.getJson());
 			            } catch (Exception e) {}
+					}else if(pin instanceof PinUartOutput){ // PinUartOutput
+						if (uart!=null) {
+							PinUartOutput pinUartOutput = (PinUartOutput)pin;
+							if (pinUartOutput.output!=null) {
+								try {
+									OutputStream out = uart.getOutputStream();
+									byte[] buffer = pinUartOutput.output.getBytes();
+									out.write(buffer);
+					            } catch (Exception e) {}
+						        pinUartOutput.output = null;
+					        }
+						}
+					}else if(pin instanceof PinUartInput){ // PinUartInput
+						if (uart!=null) {
+							PinUartInput pinUartInput = (PinUartInput)pin;
+							try {
+								InputStream in = uart.getInputStream();
+								int len = in.available();
+								if (len>0) {
+									byte[] buffer = new byte[len];
+									in.read(buffer);
+									pinUartInput.input = new String(buffer, "ASCII");
+									parameters.put(pinUartInput.getJson());
+								}
+				            } catch (Exception e) {}
+				        }
 					}
 				}
 

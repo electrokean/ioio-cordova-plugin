@@ -1,20 +1,22 @@
 var ioio = {
 	PIN_OUTPUT_PWM : "pwmOutput",
 	PIN_OUTPUT_DIGITAL : "digitalOutput",
+	PIN_OUTPUT_UART : "uartOutput",
 	PIN_INPUT_DIGITAL : "digitalInput",
 	PIN_INPUT_ANALOG : "analogInput",
+	PIN_INPUT_UART : "uartInput",
 	pinListeners:[],
-	addValuePinListener:function(pin,value,callback){
+	addValuePinListener: function(pin,value,callback){
 		if(this.pinListeners[pin]){
 			this.pinListeners[pin].push({'prevValue':value,'value':value,'callback':callback});
 		}else{
 			this.pinListeners[pin] = [{'prevValue':value,'value':value,'callback':callback}];
 		}
 	},
-	addPinListener:function(pin,callback){
+	addPinListener: function(pin,callback){
 		this.addValuePinListener(pin,0,callback);
 	},
-	clearPinListener:function(pin){
+	removeAllPinListeners: function(pin){
 		this.pinListeners[pin] = null;
 	},
 	open: function(options,succ,fail,allListener) {
@@ -40,6 +42,8 @@ var ioio = {
 						case that.PIN_OUTPUT_DIGITAL:
 							break;
 						case that.PIN_OUTPUT_PWM:
+							break;
+						case that.PIN_OUTPUT_UART:
 							break;
 						case that.PIN_INPUT_DIGITAL:
 							if(that.pinListeners[pin.pin]){
@@ -72,6 +76,13 @@ var ioio = {
 								}
 							}
 							break;
+						case that.PIN_INPUT_UART:
+							if(that.pinListeners[pin.pin]){
+								for(var j=0;j<that.pinListeners[pin.pin].length;j++){
+									that.pinListeners[pin.pin][j].callback(pin.value);
+								}
+							}
+							break;
 					}
 				}
 
@@ -92,7 +103,7 @@ var ioio = {
             [options]
         );
      },
- 	close: function(succ,fail) {
+ 	close: function(succ, fail) {
     	cordova.exec(
             succ || function(){},
             fail || function(){},
@@ -101,7 +112,7 @@ var ioio = {
 			[]
         );
 	},
- 	setPwnOutput: function(pin,freq, succ, fail) {
+ 	setPwmOutput: function(pin, freq, succ, fail) {
     	cordova.exec(
             succ || function(){},
             fail || function(){},
@@ -110,7 +121,7 @@ var ioio = {
         	[pin,freq]
         ); 
 	},
- 	setDigitalOutput: function(pin,output, succ, fail) {
+ 	setDigitalOutput: function(pin, output, succ, fail) {
     	cordova.exec(
             succ || function(){},
             fail || function(){},
@@ -119,7 +130,7 @@ var ioio = {
         	[pin,output]
         );
 	},
- 	toggleDigitalOutput: function(pin,succ, fail) {
+ 	toggleDigitalOutput: function(pin, succ, fail) {
     	cordova.exec(
             succ || function(){},
             fail || function(){},
@@ -127,8 +138,16 @@ var ioio = {
             'toggleDigitalOutput',
         	[pin]
         ); 
+	},
+    writeUart: function(data, succ, fail) {
+    	cordova.exec(
+            succ || function(){},
+            fail || function(){},
+            'IOIOCommunication',
+            'writeUart',
+			[data]
+        );
 	}
- 	
 };
 
 window.ioio = ioio;

@@ -21,6 +21,10 @@ public class IOIOCommunication extends CordovaPlugin{
 	public static final String ACTION_SET_DIGITALOUTPUT = "setDigitalOutput";
 	public static final String ACTION_TOGGLE_DIGITALOUTPUT = "toggleDigitalOutput";
 
+	public static final String ACTION_UART_OPEN = "openUart";
+	public static final String ACTION_UART_WRITE = "writeUart";
+	public static final String ACTION_UART_CLOSE = "closeUart";
+
 	@Override
 	public boolean execute(String action, JSONArray args,CallbackContext callbackContext) throws JSONException {
 		// TODO Auto-generated method stub
@@ -72,10 +76,17 @@ public class IOIOCommunication extends CordovaPlugin{
 				    JSONArray pwmArray = output.getJSONArray("pwm");
 				    for(int i=0;i<pwmArray.length();i++){
 				    	JSONObject pwm = pwmArray.getJSONObject(i);
-				    	IOIOCOmmunicationService.addPwnOutput(pwm.getInt("pin"),pwm.getInt("freq"));
+				    	IOIOCOmmunicationService.addPwmOutput(pwm.getInt("pin"),pwm.getInt("freq"));
 				    }
 		    	}
 		    }
+
+	    	if(options.has("uart")){ // CHECK UART
+	    		JSONArray uart = options.getJSONArray("uart");
+		    	IOIOCOmmunicationService.addUartInput(uart.getInt(0), uart.getInt(1), uart.getInt(2), uart.getInt(3), uart.getInt(4));
+		    	IOIOCOmmunicationService.addUartOutput(uart.getInt(1), uart.getInt(0), uart.getInt(2), uart.getInt(3), uart.getInt(4));
+	    	}
+
 			context.stopService(new Intent(context, IOIOCOmmunicationService.class));
 			context.startService(new Intent(context, IOIOCOmmunicationService.class));
 			return true;
@@ -100,6 +111,10 @@ public class IOIOCommunication extends CordovaPlugin{
 		
 		if(ACTION_TOGGLE_DIGITALOUTPUT.equals(action)){
 			IOIOCOmmunicationService.toggleDigitalOutput(args.getInt(0));
+		}
+
+		if(ACTION_UART_WRITE.equals(action)){
+			IOIOCOmmunicationService.writeUart(args.getString(0));
 		}
 		
 		callbackContext.success();

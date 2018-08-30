@@ -7,6 +7,8 @@ abstract public class Pin{
 	public static final String PIN_OUTPUT_PWM = "pwmOutput";
 	public static final String PIN_OUTPUT_DIGITAL = "digitalOutput";
 	public static final String PIN_INPUT_DIGITAL = "digitalInput";
+	public static final String PIN_OUTPUT_UART = "uartOutput";
+	public static final String PIN_INPUT_UART = "uartInput";
 	public int pin;
 	
 	public abstract JSONObject getJson();
