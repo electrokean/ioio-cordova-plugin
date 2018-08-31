@@ -6,16 +6,22 @@ import org.json.JSONObject;
 import ioio.lib.api.IOIO;
 import ioio.lib.api.Uart;
 
-public class PinUartOutput extends Pin{
-	public String output = null;
+public class PinUart extends Pin{
+	public int bus = 0;
 	public int rxPin = IOIO.INVALID_PIN;
+	public int txPin = IOIO.INVALID_PIN;
 	public int baud = 9600;
 	public Uart.Parity parity = Uart.Parity.NONE; //0
 	public Uart.StopBits stopBits = Uart.StopBits.ONE; //0
+	public String input = "";
+	public String output = null;
+	public Uart uart = null;
 	
-	public PinUartOutput(int pin, int rxPin, int baud, int parity, int stopBits){
-		this.pin = pin;
+	public PinUart(int bus, int rxPin, int txPin, int baud, int parity, int stopBits){
+		this.pin = bus + Pin.TYPE_UART;
+		this.bus = bus;
 		this.rxPin = rxPin;
+		this.txPin = txPin;
 		this.baud = baud;
 		this.parity = Uart.Parity.values()[parity];
 		this.stopBits = Uart.StopBits.values()[stopBits];
@@ -25,9 +31,9 @@ public class PinUartOutput extends Pin{
 	public JSONObject getJson() {
 		JSONObject json = new JSONObject();
 		try {
-			json.put("pin",pin);
-			json.put("value",output);
-			json.put("class",PIN_OUTPUT_UART);
+			json.put("pin",rxPin);
+			json.put("value",input);
+			json.put("class",PIN_UART);
 			json.put("info",toString());
 
 		} catch (JSONException e) {
@@ -38,7 +44,7 @@ public class PinUartOutput extends Pin{
 
 	@Override
 	public String toString() {
-		return "PinUartOutput [output=" + output + "]";
+		return "PinUartInput [input=" + input + "]";
 	}
 	
 	

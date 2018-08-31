@@ -21,9 +21,20 @@ public class IOIOCommunication extends CordovaPlugin{
 	public static final String ACTION_SET_DIGITALOUTPUT = "setDigitalOutput";
 	public static final String ACTION_TOGGLE_DIGITALOUTPUT = "toggleDigitalOutput";
 
-	public static final String ACTION_UART_OPEN = "openUart";
+	// Note that Uart, Twi, Spi "busses" only get added on service initialisation
+	// there is no real support for manually opening or closing
+
+	//public static final String ACTION_UART_OPEN = "openUart";
 	public static final String ACTION_UART_WRITE = "writeUart";
-	public static final String ACTION_UART_CLOSE = "closeUart";
+	//public static final String ACTION_UART_CLOSE = "closeUart";
+	
+	//public static final String ACTION_TWI_OPEN = "openTwi";
+	public static final String ACTION_TWI_WRITEREAD = "writeReadTwi";
+	//public static final String ACTION_TWI_CLOSE = "closeTwi";
+	
+	//public static final String ACTION_SPI_OPEN = "openSpi";
+	public static final String ACTION_SPI_WRITEREAD = "writeReadSpi";
+	//public static final String ACTION_SPI_CLOSE = "closeSpi";
 
 	@Override
 	public boolean execute(String action, JSONArray args,CallbackContext callbackContext) throws JSONException {
@@ -32,7 +43,7 @@ public class IOIOCommunication extends CordovaPlugin{
 		IOIOCOmmunicationService.lastCallbackFromJS = System.currentTimeMillis();
 		
 		Context context = this.cordova.getActivity();
-		System.out.println(TAG + " action " + action);
+		//System.out.println(TAG + " action " + action);
 		//System.out.println(TAG + " args " + args.toString());
 
 		if(ACTION_START_SERVICE.equals(action)){
@@ -82,9 +93,40 @@ public class IOIOCommunication extends CordovaPlugin{
 		    }
 
 	    	if(options.has("uart")){ // CHECK UART
-	    		JSONArray uart = options.getJSONArray("uart");
-		    	IOIOCOmmunicationService.addUartInput(uart.getInt(0), uart.getInt(1), uart.getInt(2), uart.getInt(3), uart.getInt(4));
-		    	IOIOCOmmunicationService.addUartOutput(uart.getInt(1), uart.getInt(0), uart.getInt(2), uart.getInt(3), uart.getInt(4));
+	    		JSONArray uartArray = options.getJSONArray("uart");
+			    for(int i=0;i<uartArray.length();i++){
+		    		JSONObject uart = uartArray.getJSONObject(i);
+			    	IOIOCOmmunicationService.addUart(uart.getInt("bus"), uart.getInt("rxPin"), uart.getInt("txPin"),
+			    		uart.getInt("baud"), uart.getInt("parity"), uart.getInt("stopBits"));
+	    		}
+	    	}
+
+	    	if(options.has("twi")){ // CHECK TWI
+	    		JSONArray twiArray = options.getJSONArray("twi");
+			    for(int i=0;i<twiArray.length();i++){
+			    	JSONObject twi = twiArray.getJSONObject(i);
+			    	IOIOCOmmunicationService.addTwi(twi.getInt("bus"), twi.getInt("rate"));
+			    }
+	    	}
+
+	    	if(options.has("spi")){ // CHECK SPI
+	    		JSONArray spiArray = options.getJSONArray("spi");
+			    for(int i=0;i<spiArray.length();i++){
+			    	JSONObject spi = spiArray.getJSONObject(i);
+		    		int[] ssPins = new int[1];
+			    	if (spi.has("ssPins")) {
+			    		JSONArray ssPinsArray = spi.getJSONArray("ssPins");
+			    		ssPins = new int[ssPinsArray.length()];
+			    		for(int j=0;j<ssPinsArray.length();j++){
+			    			ssPins[j] = ssPinsArray.getInt(j);
+			    		}
+			    	}
+			    	else {
+			    		ssPins[0] = spi.getInt("ssPin");
+			    	}
+		    		IOIOCOmmunicationService.addSpi(spi.getInt("bus"), spi.getInt("misoPin"), spi.getInt("mosiPin"),
+			    		spi.getInt("clkPin"), ssPins, spi.getInt("rate"));
+			    }
 	    	}
 
 			context.stopService(new Intent(context, IOIOCOmmunicationService.class));
@@ -114,7 +156,23 @@ public class IOIOCommunication extends CordovaPlugin{
 		}
 
 		if(ACTION_UART_WRITE.equals(action)){
-			IOIOCOmmunicationService.writeUart(args.getString(0));
+			IOIOCOmmunicationService.writeUart(args.getInt(0),args.getString(1));
+		}
+		
+		if(ACTION_TWI_WRITEREAD.equals(action)){
+			JSONArray data = args.getJSONArray(2);
+			byte[] request = new byte[data.length()];
+			for(int i=0; i<data.length(); i++)
+				request[i] = (byte)data.getInt(i);
+			IOIOCOmmunicationService.writeReadTwi(args.getInt(0),args.getInt(1),request,args.getInt(3));
+		}
+		
+		if(ACTION_SPI_WRITEREAD.equals(action)){
+			JSONArray data = args.getJSONArray(2);
+			byte[] request = new byte[data.length()];
+			for(int i=0; i<data.length(); i++)
+				request[i] = (byte)data.getInt(i);
+			IOIOCOmmunicationService.writeReadSpi(args.getInt(0),args.getInt(1),request);
 		}
 		
 		callbackContext.success();

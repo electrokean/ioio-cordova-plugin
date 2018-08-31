@@ -1,10 +1,11 @@
 var ioio = {
 	PIN_OUTPUT_PWM : "pwmOutput",
 	PIN_OUTPUT_DIGITAL : "digitalOutput",
-	PIN_OUTPUT_UART : "uartOutput",
 	PIN_INPUT_DIGITAL : "digitalInput",
 	PIN_INPUT_ANALOG : "analogInput",
-	PIN_INPUT_UART : "uartInput",
+	PIN_UART : "uart",
+	PIN_TWI : "twi",
+	PIN_SPI : "spi",
 	pinListeners:[],
 	addValuePinListener: function(pin,value,callback){
 		if(this.pinListeners[pin]){
@@ -16,8 +17,16 @@ var ioio = {
 	addPinListener: function(pin,callback){
 		this.addValuePinListener(pin,0,callback);
 	},
-	removeAllPinListeners: function(pin){
-		this.pinListeners[pin] = null;
+	removePinListener: function(pin,callback){
+		if (this.pinListeners[pin]) {
+			for(var j=that.pinListeners[pin].length;j>0;j--){
+				if (this.pinListeners[pin][j].callback == callback)
+					this.pinListeners[pin].splice(j, 1);
+			}
+		}
+	},
+	removeAllPinListeners: function(){
+		pinListeners = [];
 	},
 	open: function(options,succ,fail,allListener) {
 		var that = this;
@@ -33,7 +42,7 @@ var ioio = {
 						allListener(vals);
 					}catch(e){
 						console.log('IOIO Callback function error' ,e);
-			                }
+			        }
 				}
 
 				for(var i=0;i<vals.length;i++){
@@ -42,8 +51,6 @@ var ioio = {
 						case that.PIN_OUTPUT_DIGITAL:
 							break;
 						case that.PIN_OUTPUT_PWM:
-							break;
-						case that.PIN_OUTPUT_UART:
 							break;
 						case that.PIN_INPUT_DIGITAL:
 							if(that.pinListeners[pin.pin]){
@@ -76,7 +83,21 @@ var ioio = {
 								}
 							}
 							break;
-						case that.PIN_INPUT_UART:
+						case that.PIN_UART: 	// listener should be on rxPin
+							if(that.pinListeners[pin.pin]){
+								for(var j=0;j<that.pinListeners[pin.pin].length;j++){
+									that.pinListeners[pin.pin][j].callback(pin.value);
+								}
+							}
+							break;
+						case that.PIN_TWI: 		// listener should be on "virtual pin" bus#+64
+							if(that.pinListeners[pin.pin]){
+								for(var j=0;j<that.pinListeners[pin.pin].length;j++){
+									that.pinListeners[pin.pin][j].callback(pin.value);
+								}
+							}
+							break;
+						case that.PIN_SPI: 		// listener should be on "virtual pin" bus#+128
 							if(that.pinListeners[pin.pin]){
 								for(var j=0;j<that.pinListeners[pin.pin].length;j++){
 									that.pinListeners[pin.pin][j].callback(pin.value);
@@ -102,7 +123,7 @@ var ioio = {
             'openIOIO',
             [options]
         );
-     },
+    },
  	close: function(succ, fail) {
     	cordova.exec(
             succ || function(){},
@@ -139,13 +160,31 @@ var ioio = {
         	[pin]
         ); 
 	},
-    writeUart: function(data, succ, fail) {
+    writeUart: function(bus, data, succ, fail) {
     	cordova.exec(
             succ || function(){},
             fail || function(){},
             'IOIOCommunication',
             'writeUart',
-			[data]
+			[bus,data]
+        );
+	},
+    writeReadTwi: function(bus, addr, request, readLen, succ, fail) {
+    	cordova.exec(
+            succ || function(){},
+            fail || function(){},
+            'IOIOCommunication',
+            'writeReadTwi',
+			[bus,addr,request,readLen]
+        );
+	},
+    writeReadSpi: function(bus, slave, request, succ, fail) {
+    	cordova.exec(
+            succ || function(){},
+            fail || function(){},
+            'IOIOCommunication',
+            'writeReadSpi',
+			[bus,slave,request]
         );
 	}
 };

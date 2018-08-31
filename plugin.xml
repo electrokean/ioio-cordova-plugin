@@ -39,11 +39,15 @@
 			target-dir="src/com/appshed/ioioplugin/entity" 
 		/>
 		<source-file 
-				   src="src/com/appshed/ioioplugin/entity/PinUartInput.java" 
+				   src="src/com/appshed/ioioplugin/entity/PinUart.java" 
 			target-dir="src/com/appshed/ioioplugin/entity" 
 		/>
 		<source-file 
-				   src="src/com/appshed/ioioplugin/entity/PinUartOutput.java" 
+				   src="src/com/appshed/ioioplugin/entity/PinTwi.java" 
+			target-dir="src/com/appshed/ioioplugin/entity" 
+		/>
+		<source-file 
+				   src="src/com/appshed/ioioplugin/entity/PinSpi.java" 
 			target-dir="src/com/appshed/ioioplugin/entity" 
 		/>
 		<source-file 

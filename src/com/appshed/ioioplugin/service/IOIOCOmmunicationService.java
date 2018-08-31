@@ -15,8 +15,9 @@ import com.appshed.ioioplugin.entity.PinAnalogInput;
 import com.appshed.ioioplugin.entity.PinDigitalInput;
 import com.appshed.ioioplugin.entity.PinDigitalOutput;
 import com.appshed.ioioplugin.entity.PinPwmOutput;
-import com.appshed.ioioplugin.entity.PinUartInput;
-import com.appshed.ioioplugin.entity.PinUartOutput;
+import com.appshed.ioioplugin.entity.PinUart;
+import com.appshed.ioioplugin.entity.PinTwi;
+import com.appshed.ioioplugin.entity.PinSpi;
 
 import android.content.Intent;
 import android.os.IBinder;
@@ -24,7 +25,8 @@ import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.IOIO;
 import ioio.lib.api.IOIO.VersionType;
 import ioio.lib.api.Uart;
-import ioio.lib.api.Uart.StopBits;
+import ioio.lib.api.TwiMaster;
+import ioio.lib.api.SpiMaster;
 import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
@@ -36,6 +38,8 @@ import ioio.lib.util.android.IOIOService;
  * notification bar, enabling the user to stop the service.
  */
 public class IOIOCOmmunicationService extends IOIOService {
+	public static final String TAG = IOIOCOmmunicationService.class.getSimpleName();
+
 	public static final int PWM_MAX_FREQ = 10000;
 	public static Map<Integer,Pin> pins;
 	public static CallbackContext eventListener;
@@ -44,9 +48,6 @@ public class IOIOCOmmunicationService extends IOIOService {
 	public static boolean activeLed = true;
 	public static long lastCallbackFromJS = 0;
 	public static long lastCallbackToJS = 0;
-
-	public static Uart uart = null;
-	public static int txpin = -1;
 
 	public static void initPins(){
 		System.out.print("initPins()");
@@ -69,12 +70,16 @@ public class IOIOCOmmunicationService extends IOIOService {
 		pins.put(pinPort,new PinDigitalInput(pinPort));
 	}
 
-	public static void addUartOutput(int txPin, int rxPin, int baud, int parity, int stopBits){
-		pins.put(txPin,new PinUartOutput(txPin, rxPin, baud, parity, stopBits));
+	public static void addUart(int bus, int rxPin, int txPin, int baud, int parity, int stopBits){
+		pins.put(bus+Pin.TYPE_UART,new PinUart(bus, rxPin, txPin, baud, parity, stopBits));
 	}
 
-	public static void addUartInput(int rxPin, int txPin, int baud, int parity, int stopBits){
-		pins.put(rxPin,new PinUartInput(rxPin, txPin, baud, parity, stopBits));
+	public static void addTwi(int bus, int rate){
+		pins.put(bus+Pin.TYPE_TWI, new PinTwi(bus, rate));
+	}
+
+	public static void addSpi(int bus, int misoPin, int mosiPin, int clkPin, int[] ssPins, int rate){
+		pins.put(bus+Pin.TYPE_SPI, new PinSpi(bus, misoPin, mosiPin, clkPin, ssPins, rate));
 	}
 
 	public static void setPwmOutput(int pinPort,int freq){
@@ -96,10 +101,43 @@ public class IOIOCOmmunicationService extends IOIOService {
 		}
 	}
 
-	public static void writeUart(String data){
-		if (uart!=null || txpin<0) return;
-		PinUartOutput pinUartOutput = (PinUartOutput)pins.get(txpin);
-		pinUartOutput.output = data;
+	public static void writeUart(int bus, String data){
+		if(pins.containsKey(bus+Pin.TYPE_UART) && pins.get(bus+Pin.TYPE_UART)instanceof PinUart){
+			PinUart pinUart = (PinUart)pins.get(bus+Pin.TYPE_UART);
+			pinUart.output = data;
+		}
+	}
+
+	public static void writeReadTwi(int bus, int addr, byte[] request, int readLen){
+		if(pins.containsKey(bus+Pin.TYPE_TWI) && pins.get(bus+Pin.TYPE_TWI)instanceof PinTwi){
+			PinTwi pinTwi = (PinTwi)pins.get(bus+Pin.TYPE_TWI);
+			pinTwi.addr = addr;
+			pinTwi.request = request;
+			pinTwi.readLen = readLen;
+			pinTwi.response = new byte[pinTwi.readLen];
+			pinTwi.start = true;
+		}
+	}
+
+	public static void writeReadSpi(int bus, int slave, byte[] request){
+		if(pins.containsKey(bus+Pin.TYPE_SPI) && pins.get(bus+Pin.TYPE_SPI)instanceof PinSpi){
+			PinSpi pinSpi = (PinSpi)pins.get(bus+Pin.TYPE_SPI);
+			pinSpi.slave = slave;
+			pinSpi.request = request;
+			pinSpi.response = new byte[request.length];
+			pinSpi.start = true;
+		}
+	}
+
+	private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+	public static String bytesToHex(byte[] bytes) {
+	    char[] hexChars = new char[bytes.length * 2];
+	    for ( int j = 0; j < bytes.length; j++ ) {
+	        int v = bytes[j] & 0xFF;
+	        hexChars[j * 2] = hexArray[v >>> 4];
+	        hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+	    }
+	    return new String(hexChars);
 	}
 
 	@Override
@@ -146,17 +184,21 @@ public class IOIOCOmmunicationService extends IOIOService {
 					}else if(pin instanceof PinDigitalInput){ // PinDigitalInput
 						PinDigitalInput pinDigitalInput = (PinDigitalInput)pin;
 						pinDigitalInput.digitalInput = ioio_.openDigitalInput(pinPort);
-					}else if(pin instanceof PinUartOutput){ // PinUartInput
-						PinUartOutput pinUartOutput = (PinUartOutput)pin;
-						if (uart==null)
-							uart = ioio_.openUart(pinUartOutput.rxPin, pinUartOutput.pin, pinUartOutput.baud, 
-								pinUartOutput.parity, pinUartOutput.stopBits);
-						txpin = pinUartOutput.pin;
-					}else if(pin instanceof PinUartInput){ // PinUartInput
-						PinUartInput pinUartInput = (PinUartInput)pin;
-						if (uart==null)
-							uart = ioio_.openUart(pinUartInput.pin, pinUartInput.txPin, pinUartInput.baud, 
-								pinUartInput.parity, pinUartInput.stopBits);
+					}else if(pin instanceof PinUart){ // PinUart
+						PinUart pinUart = (PinUart)pin;
+						//System.out.println(TAG + " opening uart" + pinUart.bus + " rxPin=" + pinUart.rxPin + " baud=" + pinUart.baud);
+						if (pinUart.uart==null)
+							pinUart.uart = ioio_.openUart(pinUart.rxPin, pinUart.txPin, pinUart.baud, 
+								pinUart.parity, pinUart.stopBits);
+					}else if(pin instanceof PinTwi){ // PinTwi
+						PinTwi pinTwi = (PinTwi)pin;
+						if (pinTwi.twi==null)
+							pinTwi.twi = ioio_.openTwiMaster(pinTwi.bus, pinTwi.rate, pinTwi.smbus);
+					}else if(pin instanceof PinSpi){ // PinSpi
+						PinSpi pinSpi = (PinSpi)pin;
+						if (pinSpi.spi==null)
+							pinSpi.spi = ioio_.openSpiMaster(pinSpi.misoPin, pinSpi.mosiPin, pinSpi.clkPin,
+								pinSpi.ssPins, pinSpi.rate);
 					}
 				}
 			}
@@ -204,30 +246,52 @@ public class IOIOCOmmunicationService extends IOIOService {
 						try {
 							parameters.put(pinDigitalInput.getJson());
 			            } catch (Exception e) {}
-					}else if(pin instanceof PinUartOutput){ // PinUartOutput
-						if (uart!=null) {
-							PinUartOutput pinUartOutput = (PinUartOutput)pin;
-							if (pinUartOutput.output!=null) {
-								try {
-									OutputStream out = uart.getOutputStream();
-									byte[] buffer = pinUartOutput.output.getBytes();
-									out.write(buffer);
-					            } catch (Exception e) {}
-						        pinUartOutput.output = null;
-					        }
-						}
-					}else if(pin instanceof PinUartInput){ // PinUartInput
-						if (uart!=null) {
-							PinUartInput pinUartInput = (PinUartInput)pin;
+					}else if(pin instanceof PinUart){ // PinUart
+						PinUart pinUart = (PinUart)pin;
+						if (pinUart.uart!=null) {
 							try {
-								InputStream in = uart.getInputStream();
+								InputStream in = pinUart.uart.getInputStream();
 								int len = in.available();
 								if (len>0) {
+									System.out.println(TAG + " uart" + pinUart.bus + " avail=" + len);
 									byte[] buffer = new byte[len];
 									in.read(buffer);
-									pinUartInput.input = new String(buffer, "ASCII");
-									parameters.put(pinUartInput.getJson());
+									System.out.println(TAG + " uart" + pinUart.bus + " buffer=" + bytesToHex(buffer));
+									pinUart.input = new String(buffer, "ASCII");
+									parameters.put(pinUart.getJson());
 								}
+				            } catch (Exception e) {}
+							if (pinUart.output!=null) {
+								try {
+									OutputStream out = pinUart.uart.getOutputStream();
+									byte[] buffer = pinUart.output.getBytes();
+									out.write(buffer);
+					            } catch (Exception e) {}
+						        pinUart.output = null;
+					        }
+				        }
+					}else if(pin instanceof PinTwi){ // PinTwi
+						PinTwi pinTwi = (PinTwi)pin;
+						if (pinTwi.twi!=null && pinTwi.start) {
+							try {
+								pinTwi.start = false;
+								System.out.println(TAG + " twi" + pinTwi.bus + " request=" + bytesToHex(pinTwi.request));
+								pinTwi.twi.writeRead(pinTwi.addr, false, pinTwi.request, pinTwi.request.length,
+									pinTwi.response, pinTwi.readLen);
+								System.out.println(TAG + " twi" + pinTwi.bus + " response=" + bytesToHex(pinTwi.response));
+								parameters.put(pinTwi.getJson());
+				            } catch (Exception e) {}
+				        }
+					}else if(pin instanceof PinSpi){ // PinSpi
+						PinSpi pinSpi = (PinSpi)pin;
+						if (pinSpi.spi!=null && pinSpi.start) {
+							try {
+								pinSpi.start = false;
+								System.out.println(TAG + " spi" + pinSpi.bus + " request=" + bytesToHex(pinSpi.request));
+								pinSpi.spi.writeRead(pinSpi.slave, pinSpi.request, pinSpi.request.length,
+									pinSpi.request.length, pinSpi.response, pinSpi.response.length);
+								System.out.println(TAG + " spi" + pinSpi.bus + " response=" + bytesToHex(pinSpi.response));
+								parameters.put(pinSpi.getJson());
 				            } catch (Exception e) {}
 				        }
 					}
